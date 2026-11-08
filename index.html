@@ -38,7 +38,7 @@ body.locked>*:not(#lock){display:none!important}#lock{display:none}body.locked #
 <div id="lock"><div class="card" style="margin-top:18vh;text-align:center"><div style="font-size:42px">🔒</div><h2 id="lt"></h2>
 <input id="p1" type="password" inputmode="numeric" autocomplete="off" placeholder="الرمز">
 <input id="p2" type="password" inputmode="numeric" autocomplete="off" placeholder="تأكيد الرمز" style="margin-top:8px">
-<button class="btn" id="lb" onclick="submitPin()"></button><div id="le" class="r" style="margin-top:8px"></div></div></div>
+<button class="btn" id="lb" onclick="submitPin()"></button><button class="btn s" id="sk" onclick="skipPin()">بدون رمز قفل</button><div id="le" class="r" style="margin-top:8px"></div></div></div>
 <script>
 const K='perfume_acc_v3',PK='perfume_pin_v1';let S=null;
 try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
@@ -133,7 +133,7 @@ ${Math.abs(c.cash+c.raw-c.eq)<0.01?'<p class="g">✓ الأرقام متوازن
 <label>رمز العملة</label><input value="${esc(S.cur)}" onchange="S.cur=this.value||'د.أ';save();render()">
 <textarea id="bk" rows="3" placeholder="هون بتظهر النسخة الاحتياطية، أو الصقها لتستعيد بياناتك"></textarea>
 <div class="row"><button class="btn s" onclick="$('bk').value=JSON.stringify(S)">تصدير</button><button class="btn s" onclick="imp()">استيراد</button></div>
-<div class="row"><button class="btn s" onclick="lockUI('login')">قفل الآن</button><button class="btn s" onclick="lockUI('change')">تغيير رمز القفل</button></div>
+${gp()?'<div class="row"><button class="btn s" onclick="lockUI(\'login\')">قفل الآن</button><button class="btn s" onclick="lockUI(\'change\')">تغيير الرمز</button></div><button class="btn s" onclick="rmPin()">إلغاء رمز القفل</button>':'<button class="btn s" onclick="lockUI(\'change\')">تفعيل رمز قفل</button>'}
 <button class="btn s" onclick="reset()">${rst?'اضغط مرة ثانية لتأكيد حذف كل البيانات':'مسح كل البيانات'}</button>
 <p class="mu">البيانات محفوظة في متصفحك فقط، خذ نسخة احتياطية (تصدير) بين فترة وفترة. كل سجل بتقدر تعدله أو تحذفه بزر ✏️.</p></div>`},
 sal(){const r=calc().r,g={};byd(S.sales).forEach(x=>(g[x.d]=g[x.d]||[]).push(x));
@@ -160,18 +160,21 @@ render();
 /* القفل */
 let mode='login',fails=0,until=0,hiddenAt=0;
 const hs=async p=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('perfume:'+p));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')};
+const NK='perfume_nopin',np=()=>{try{return localStorage.getItem(NK)==='1'}catch(e){return false}};
+function skipPin(){try{localStorage.setItem(NK,'1')}catch(e){}document.body.classList.remove('locked');render()}
+function rmPin(){if(!confirm('إلغاء رمز القفل؟ أي حدا بمسك الهاتف بيفتح البرنامج'))return;try{localStorage.removeItem(PK);localStorage.setItem(NK,'1')}catch(e){}render()}
 const gp=()=>{try{return localStorage.getItem(PK)}catch(e){return null}};
 function lockUI(md){mode=md;document.body.classList.add('locked');$('lt').textContent=md==='login'?'أدخل رمز القفل':md==='setup'?'أنشئ رمز قفل (4 أرقام على الأقل)':'أدخل رمز القفل الجديد';
-$('p2').style.display=md==='login'?'none':'block';$('lb').textContent=md==='login'?'فتح':'حفظ الرمز';$('p1').value=$('p2').value='';$('le').textContent=''}
+$('p2').style.display=md==='login'?'none':'block';$('sk').style.display=md==='setup'?'block':'none';$('lb').textContent=md==='login'?'فتح':'حفظ الرمز';$('p1').value=$('p2').value='';$('le').textContent=''}
 async function submitPin(){const a=$('p1').value,e=$('le');
 if(mode==='login'){if(Date.now()<until){e.textContent='انتظر قليلاً ثم حاول مرة ثانية';return}
 if(await hs(a)===gp()){fails=0;document.body.classList.remove('locked')}else{fails++;until=Date.now()+Math.min(fails*3,60)*1000;e.textContent='الرمز غير صحيح'}return}
 if(a.length<4){e.textContent='الرمز لازم 4 أرقام على الأقل';return}
 if(a!==$('p2').value){e.textContent='الرمزان غير متطابقين';return}
-try{localStorage.setItem(PK,await hs(a))}catch(x){e.textContent='تعذر حفظ الرمز';return}
-document.body.classList.remove('locked')}
+try{localStorage.setItem(PK,await hs(a));localStorage.removeItem(NK)}catch(x){e.textContent='تعذر حفظ الرمز';return}
+document.body.classList.remove('locked');render()}
 ['p1','p2'].forEach(i=>$(i).addEventListener('keydown',e=>{if(e.key==='Enter')submitPin()}));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>30000&&gp())lockUI('login')});
-lockUI(gp()?'login':'setup');
+if(np()&&!gp())document.body.classList.remove('locked');else lockUI(gp()?'login':'setup');
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 </script></body></html>
