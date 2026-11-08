@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="محاسبة العطور">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json" crossorigin="use-credentials">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 
@@ -118,7 +118,9 @@ mk(){const ps=S.prods.filter(p=>p.qty>0);return `<div class="card"><h2>تصني�
 <label>القنينة الفارغة (اختياري)</label><select id="pb">${opts('container',1)}</select>
 <label>سعر البيع للقنينة</label><input id="ps" type="number" inputmode="decimal">
 <button class="btn" onclick="make()">تصنيع وخصم من المخزون</button></div>
-<div class="card"><h2>بيع</h2><label>القنينة</label><select id="sp" onchange="pre()"><option value="">— اختر —</option>${ps.map(p=>'<option value="'+p.id+'">'+esc(p.name)+' (متوفر '+p.qty+')</option>').join('')}</select>
+<div class="card"><h2>مبيعات اليوم (إدخال دفعة وحدة)</h2><label>التاريخ</label><input id="dd" type="date" value="${today()}">
+${ps.length?`<div class="tw"><table><tr><th>العطر</th><th>متوفر</th><th>المباع</th><th>السعر</th></tr>${ps.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.qty}</td><td><input id="dq_${p.id}" type="number" inputmode="numeric" min="0" placeholder="0" oninput="dayCalc()" style="width:70px"></td><td><input id="dp_${p.id}" type="number" inputmode="decimal" value="${p.sell||''}" oninput="dayCalc()" style="width:80px"></td></tr>`).join('')}</table></div><p id="dt" class="mu"></p><button class="btn" onclick="daySave()">حفظ مبيعات اليوم</button>`:'<p class="mu">ما في قناني جاهزة للبيع</p>'}</div>
+<div class="card"><h2>بيع منفرد</h2><label>القنينة</label><select id="sp" onchange="pre()"><option value="">— اختر —</option>${ps.map(p=>'<option value="'+p.id+'">'+esc(p.name)+' (متوفر '+p.qty+')</option>').join('')}</select>
 <div class="row"><div><label>الكمية</label><input id="sq" type="number" value="1"></div><div><label>سعر البيع للقنينة</label><input id="sr" type="number" inputmode="decimal"></div></div>
 <button class="btn" onclick="sell()">تسجيل بيع</button></div>
 <div class="card"><h2>القناني الجاهزة</h2><div class="tw"><table><tr><th>العطر</th><th>مل (زيت+كحول)</th><th>متوفر</th><th>التكلفة</th><th>البيع</th></tr>
@@ -147,6 +149,9 @@ p.qty-=q;S.sales.push({d:today(),name:p.name,qty:q,price:pr,cogs:q*p.cost});done
 function addExp(){const a=n($('ea').value),d=$('ed').value.trim();if(a<=0||!d)return msg('أكمل البيان والمبلغ');S.exps.push({d:today(),desc:d,amt:a});done('تمت إضافة المصروف')}
 function imp(){try{const o=JSON.parse($('bk').value);if(!o.capital||!o.mats)throw 0;S=o;save();render();msg('تمت الاستعادة',1)}catch(e){msg('النسخة غير صالحة')}}
 function reset(){if(!rst){rst=true;render();return}S={cur:S.cur,capital:[],mats:[],purchases:[],prods:[],sales:[],exps:[]};rst=false;save();render()}
+function dayCalc(){let r=0,c=0;S.prods.forEach(p=>{const a=$('dq_'+p.id),b=$('dp_'+p.id);if(!a||!b)return;const q=Math.floor(n(a.value));if(q>0){r+=q*n(b.value);c+=q*p.cost}});const e=$('dt');if(e)e.textContent='الإجمالي: '+m(r)+' — الربح: '+m(r-c)}
+function daySave(){const d=$('dd').value||today(),rows=[];for(const p of S.prods){if(p.qty<=0)continue;const q=Math.floor(n($('dq_'+p.id).value)),pr=n($('dp_'+p.id).value);if(q<=0)continue;if(q>p.qty)return msg('الكمية أكبر من المتوفر: '+esc(p.name));if(pr<=0)return msg('أدخل سعر البيع: '+esc(p.name));rows.push([p,q,pr])}
+if(!rows.length)return msg('ما في مبيعات مدخلة');let r=0,pf=0;rows.forEach(([p,q,pr])=>{p.qty-=q;S.sales.push({d,name:p.name,qty:q,price:pr,cogs:q*p.cost});r+=q*pr;pf+=q*(pr-p.cost)});done('تم تسجيل مبيعات اليوم: '+f(r)+' '+S.cur+'، الربح '+f(pf)+' '+S.cur)}
 render();
 const PK='perfume_pin_v1';let mode='login',fails=0,until=0,hiddenAt=0;
 const hs=async p=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('perfume:'+p));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')};
