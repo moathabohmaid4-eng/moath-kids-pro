@@ -40,10 +40,10 @@ body.locked>*:not(#lock){display:none!important}#lock{display:none}body.locked #
 <input id="p2" type="password" inputmode="numeric" autocomplete="off" placeholder="تأكيد الرمز" style="margin-top:8px">
 <button class="btn" id="lb" onclick="submitPin()"></button><div id="le" class="r" style="margin-top:8px"></div></div></div>
 <script>
-const K='perfume_acc_v2',PK='perfume_pin_v1';let S=null;
+const K='perfume_acc_v3',PK='perfume_pin_v1';let S=null;
 try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
-if(!S||S.v!==2)S={v:2,cur:'د.أ',mats:[],capital:[],purchases:[],makes:[],sales:[],exps:[]};
-let tab='sum',ed=null,dc=false,rst=false;
+if(!S||S.v!==3)S={v:3,cur:'د.أ',mats:[],capital:[],purchases:[],sales:[],exps:[]};
+let tab='sal',ed=null,dc=false,rst=false,lastD=null;
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const $=i=>document.getElementById(i),n=v=>parseFloat(v)||0;
 const f=v=>(Math.round(v*100)/100).toLocaleString('en'),m=v=>f(v)+' '+S.cur;
@@ -51,97 +51,99 @@ const sum=(a,fn)=>a.reduce((s,x)=>s+fn(x),0);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const today=()=>new Date().toISOString().slice(0,10);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const TN={oil:'زيت',alcohol:'كحول',container:'قنينة فارغة'},un=t=>t==='container'?'حبة':'مل';
 const msg=(t,ok)=>{$('msg').innerHTML='<span class="'+(ok?'g':'r')+'">'+t+'</span>'};
-const mo=t=>S.mats.filter(x=>x.type===t).map(x=>[x.id,x.name]);
 const mn=id=>(S.mats.find(x=>x.id===id)||{name:'؟'}).name;
-const cl=v=>v<0?'r':'g',byd=a=>[...a].sort((x,y)=>x.d<y.d?1:-1),P=['amt','qty','oilMl','cnt','price'];
+const cl=v=>v<0?'r':'g',byd=a=>[...a].sort((x,y)=>x.d<y.d?1:-1),P=['amt','qty'];
 const SC={
 capital:[['d','التاريخ','d'],['amt','المبلغ','n'],['note','ملاحظة','t']],
 exps:[['d','التاريخ','d'],['desc','البيان','t'],['amt','المبلغ','n']],
-purchases:[['d','التاريخ','d'],['mid','المادة','s',()=>S.mats.map(x=>[x.id,x.name+' ('+TN[x.type]+')'])],['qty','الكمية','n'],['cost','إجمالي السعر','n']],
-makes:[['d','التاريخ','d'],['name','اسم العطر','t'],['oil','الزيت','s',()=>mo('oil')],['oilMl','مل زيت / قنينة','n'],['alc','الكحول','s',()=>mo('alcohol')],['alcMl','مل كحول / قنينة','n'],['con','القنينة الفارغة (اختياري)','s',()=>[['','— بدون —'],...mo('container')]],['cnt','عدد القناني','n'],['sell','سعر البيع للقنينة','n']],
-sales:[['d','التاريخ','d'],['mk','العطر','s',()=>S.makes.map(x=>[x.id,x.name+' · '+x.d])],['qty','الكمية','n'],['price','سعر البيع للقنينة','n']],
-mats:[['name','الاسم','t'],['type','النوع','s',()=>Object.entries(TN)]]};
+purchases:[['d','التاريخ','d'],['mid','المادة','s',()=>S.mats.map(x=>[x.id,x.name+' ('+x.unit+')'])],['qty','الكمية','n'],['cost','إجمالي السعر','n']],
+mats:[['name','الاسم','t'],['unit','الوحدة (مل، حبة، غرام...)','t']]};
 
 /* المحرك: كل الأرقام بتنحسب من السجلات بترتيب التاريخ، فأي تعديل بينعكس على الكل */
-function R(s){const M={},mk={},cg={},err=[],ev=[];
-s.mats.forEach(x=>M[x.id]={qty:0,cost:0});
-s.purchases.forEach(x=>ev.push([x.d,0,x.s,'p',x]));s.makes.forEach(x=>ev.push([x.d,1,x.s,'m',x]));s.sales.forEach(x=>ev.push([x.d,2,x.s,'s',x]));
+function R(s){const M={},cg={},err=[],ev=[];s.mats.forEach(x=>M[x.id]={qty:0,cost:0,last:0});
+s.purchases.forEach(x=>ev.push([x.d,0,x.s,x]));s.sales.forEach(x=>ev.push([x.d,1,x.s,x]));
 ev.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:a[1]-b[1]||a[2]-b[2]);
-for(const [d,,,t,x] of ev){
-if(t==='p'){const q=M[x.mid];if(!q){err.push('في مشتريات مرتبطة بمادة محذوفة');continue}q.qty+=x.qty;q.cost+=x.cost}
-else if(t==='m'){let u=0;for(const [id,per] of [[x.oil,x.oilMl],[x.alc,x.alcMl],[x.con,1]]){if(!id)continue;const q=M[id];if(!q){err.push('العطر '+x.name+' مرتبط بمادة محذوفة');continue}const nd=per*x.cnt;if(q.qty<nd-1e-9)err.push('المخزون لا يكفي لتصنيع '+x.name+' بتاريخ '+d);const av=q.qty>0?q.cost/q.qty:0;u+=per*av;q.qty-=nd;q.cost-=nd*av}mk[x.id]={name:x.name,qty:x.cnt,u}}
-else{const b=mk[x.mk];if(!b){err.push('في بيع قبل تاريخ تصنيع العطر أو العطر محذوف');continue}if(b.qty<x.qty-1e-9)err.push('الكمية المباعة من '+b.name+' أكبر من المتوفر بتاريخ '+d);b.qty-=x.qty;cg[x.id]=x.qty*b.u}}
-return{M,mk,cg,err}}
-function calc(){const r=R(S),c=sum(S.capital,x=>x.amt),rev=sum(S.sales,x=>x.qty*x.price),cogs=sum(Object.values(r.cg),x=>x),ex=sum(S.exps,x=>x.amt),pu=sum(S.purchases,x=>x.cost),raw=sum(Object.values(r.M),x=>x.cost),fin=sum(Object.values(r.mk),x=>x.qty*x.u);
-return{r,c,rev,cogs,ex,gp:rev-cogs,net:rev-cogs-ex,raw,fin,inv:raw+fin,cash:c+rev-pu-ex,eq:c+rev-cogs-ex}}
-function commit(fn,ok){const b=JSON.stringify(S);fn();const e=R(S).err;if(e.length){S=JSON.parse(b);msg('ما انحفظ لأنو بيخلّي الأرقام غير متسقة: '+esc(e[0]));return false}ed=null;dc=false;save();render();msg(ok,1);return true}
+for(const [,t,,x] of ev){
+if(!t){const q=M[x.mid];if(!q){err.push('في مشتريات مرتبطة بمادة محذوفة');continue}q.qty+=x.qty;q.cost+=x.cost;if(x.qty>0)q.last=x.cost/x.qty}
+else{let c=0;for(const it of x.items){const q=M[it.mid];if(!q){err.push('بيع "'+x.name+'" مرتبط بمادة محذوفة');continue}const nd=it.amt*x.qty,av=q.qty>0?(q.last=q.cost/q.qty):q.last;c+=nd*av;q.qty-=nd;q.cost-=nd*av}cg[x.id]=c}}
+return{M,cg,err}}
+function calc(){const r=R(S),c=sum(S.capital,x=>x.amt),rev=sum(S.sales,x=>x.qty*x.price),cogs=sum(Object.values(r.cg),x=>x),ex=sum(S.exps,x=>x.amt),pu=sum(S.purchases,x=>x.cost),raw=sum(Object.values(r.M),x=>x.cost),td=S.sales.filter(x=>x.d===today()),tr=sum(td,x=>x.qty*x.price);
+return{r,c,rev,cogs,ex,gp:rev-cogs,net:rev-cogs-ex,raw,cash:c+rev-pu-ex,eq:c+rev-cogs-ex,tr,tp:tr-sum(td,x=>r.cg[x.id]||0)}}
+const low=()=>S.mats.filter(x=>R(S).M[x.id].qty<-1e-6).map(x=>x.name);
+function commit(fn,ok){const b=JSON.stringify(S);fn();const e=R(S).err;if(e.length){S=JSON.parse(b);msg('ما انحفظ: '+esc(e[0]));return false}ed=null;dc=false;save();render();const w=low();msg(ok+(w.length?' — ⚠ تنبيه: مخزون ناقص من '+esc(w.join('، '))+'، سجّل مشترياته حتى تكون التكلفة دقيقة':''),!w.length);return true}
 
 function fld(t,rec,p){return SC[t].map(([k,l,kd,o])=>{const v=rec?rec[k]:(kd==='d'?today():'');let i;
 if(kd==='s')i='<select id="'+p+k+'">'+o().map(([a,b])=>'<option value="'+esc(a)+'"'+(a===v?' selected':'')+'>'+esc(b)+'</option>').join('')+'</select>';
 else i='<input id="'+p+k+'" type="'+(kd==='d'?'date':kd==='n'?'number':'text')+'"'+(kd==='n'?' inputmode="decimal" step="any"':'')+' value="'+(v===undefined?'':esc(v))+'">';
 return '<label>'+l+'</label>'+i}).join('')}
 function grab(t,p){const o={};for(const [k,l,kd] of SC[t]){const v=$(p+k).value;
-if(kd==='n'){let x=parseFloat(v);if(k==='cnt')x=Math.floor(x);if(isNaN(x)||x<0||(P.includes(k)&&x<=0)){msg('تحقق من: '+l);return null}o[k]=x}
+if(kd==='n'){const x=parseFloat(v);if(isNaN(x)||x<0||(P.includes(k)&&x<=0)){msg('تحقق من: '+l);return null}o[k]=x}
 else if(kd==='t'){if(!v.trim()&&k!=='note'){msg('أكمل: '+l);return null}o[k]=v.trim()}
-else if(kd==='s'&&!v&&k!=='con'){msg('اختر: '+l);return null}else o[k]=v}
+else if(kd==='s'&&!v){msg('اختر: '+l);return null}else o[k]=v}
 if(o.d==='')return msg('حدد التاريخ'),null;return o}
 function add(t){const o=grab(t,'a_');if(!o)return;o.id=uid();o.s=Date.now();commit(()=>S[t].push(o),'تمت الإضافة')}
+
+/* المبيعات: المستخدم بيحدد المواد والكميات بحرية لكل بيع */
+const rowH=it=>'<div class="row" style="grid-template-columns:2fr 1fr auto;margin-top:6px"><select>'+S.mats.map(y=>'<option value="'+y.id+'"'+(it&&y.id===it.mid?' selected':'')+'>'+esc(y.name)+' ('+esc(y.unit)+')</option>').join('')+'</select><input type="number" inputmode="decimal" step="any" placeholder="الكمية" value="'+(it&&it.amt!==undefined?it.amt:'')+'"><button class="e" onclick="this.parentNode.remove()">✕</button></div>';
+function addRow(p){if(!S.mats.length)return msg('سجّل مواد بتبويب المخزون أول');$(p+'r').insertAdjacentHTML('beforeend',rowH())}
+function saleForm(rec,p){const x=rec||{d:lastD||today(),name:'',qty:1,price:'',items:[]};
+return '<label>التاريخ</label><input id="'+p+'d" type="date" value="'+x.d+'"><label>اسم العطر</label><input id="'+p+'n" list="nl" value="'+esc(x.name)+'" onchange="fill(\''+p+'\')" placeholder="مثلاً: رويال"><datalist id="nl">'+[...new Set(S.sales.map(y=>y.name))].map(v=>'<option value="'+esc(v)+'">').join('')+'</datalist>'
++'<div class="row"><div><label>عدد القناني</label><input id="'+p+'q" type="number" inputmode="numeric" value="'+x.qty+'"></div><div><label>سعر البيع للقنينة</label><input id="'+p+'p" type="number" inputmode="decimal" value="'+x.price+'"></div></div>'
++'<label>المواد المستخدمة لكل قنينة (زيت، كحول، قنينة، علبة... أي شي)</label><div id="'+p+'r">'+x.items.map(rowH).join('')+'</div><button class="btn s" onclick="addRow(\''+p+'\')">+ إضافة مادة</button>'}
+function fill(p){const nm=$(p+'n').value.trim(),y=S.sales.filter(z=>z.name===nm).sort((a,b)=>b.s-a.s)[0];if(!y||$(p+'r').children.length)return;$(p+'p').value=y.price;$(p+'r').innerHTML=y.items.map(rowH).join('')}
+function readItems(p){return [...$(p+'r').children].map(r=>({mid:r.querySelector('select').value,amt:n(r.querySelector('input').value)})).filter(i=>i.amt>0)}
+function saleObj(p){const o={d:$(p+'d').value,name:$(p+'n').value.trim(),qty:Math.floor(n($(p+'q').value)),price:n($(p+'p').value),items:readItems(p)};
+if(!o.d||!o.name||o.qty<1)return msg('أكمل التاريخ واسم العطر وعدد القناني'),null;if($(p+'p').value==='')return msg('أدخل سعر البيع'),null;return o}
+function saleAdd(){const o=saleObj('a_');if(!o)return;o.id=uid();o.s=Date.now();lastD=o.d;commit(()=>S.sales.push(o),'تم تسجيل البيع')}
 function oe(t,id){ed={t,id};dc=false;render();window.scrollTo(0,0)}
-function saveEd(){const o=grab(ed.t,'e_');if(!o)return;commit(()=>Object.assign(S[ed.t].find(x=>x.id===ed.id),o),'تم التعديل')}
+function saveEd(){const s=ed.t==='sales',o=s?saleObj('e_'):grab(ed.t,'e_');if(!o)return;commit(()=>Object.assign(S[ed.t].find(x=>x.id===ed.id),o),'تم التعديل')}
 function delEd(){if(!dc){dc=true;render();return}if(!commit(()=>{S[ed.t]=S[ed.t].filter(x=>x.id!==ed.id)},'تم الحذف')){dc=false;render()}}
-function edCard(){if(!ed)return'';const x=S[ed.t].find(y=>y.id===ed.id);if(!x)return'';return '<div class="card" style="border-color:var(--ac)"><h2>تعديل</h2>'+fld(ed.t,x,'e_')+'<div class="row"><button class="btn" onclick="saveEd()">حفظ التعديل</button><button class="btn s" onclick="ed=null;dc=false;render()">إلغاء</button></div><button class="btn s" onclick="delEd()">'+(dc?'اضغط مرة ثانية للتأكيد':'حذف')+'</button></div>'}
-function buy(){const d=$('bd').value||today(),name=$('bn').value.trim(),type=$('bt').value,q=n($('bq').value),c=n($('bc').value);if(!name||q<=0||c<0)return msg('أكمل الاسم والكمية والسعر');
-commit(()=>{let x=S.mats.find(y=>y.name===name&&y.type===type);if(!x){x={id:uid(),name,type};S.mats.push(x)}S.purchases.push({id:uid(),s:Date.now(),d,mid:x.id,qty:q,cost:c})},'تمت إضافة الشراء للمخزون')}
-function dayCalc(){if(!$('dt'))return;const r=calc().r;let a=0,c=0;Object.keys(r.mk).forEach(id=>{const q=$('dq_'+id);if(!q)return;const k=Math.floor(n(q.value));if(k>0){a+=k*n($('dp_'+id).value);c+=k*r.mk[id].u}});$('dt').textContent='الإجمالي: '+m(a)+' — الربح: '+m(a-c)}
-function daySave(){const d=$('dd').value||today(),rs=[];for(const x of S.makes){const q=$('dq_'+x.id);if(!q)continue;const k=Math.floor(n(q.value)),p=n($('dp_'+x.id).value);if(k<=0)continue;if(p<=0)return msg('أدخل سعر البيع: '+esc(x.name));rs.push({id:uid(),s:Date.now()+rs.length,d,mk:x.id,qty:k,price:p})}
-if(!rs.length)return msg('ما في مبيعات مدخلة');commit(()=>rs.forEach(x=>S.sales.push(x)),'تم تسجيل مبيعات اليوم')}
+function edCard(){if(!ed)return'';const x=S[ed.t].find(y=>y.id===ed.id);if(!x)return'';return '<div class="card" style="border-color:var(--ac)"><h2>تعديل</h2>'+(ed.t==='sales'?saleForm(x,'e_'):fld(ed.t,x,'e_'))+'<div class="row"><button class="btn" onclick="saveEd()">حفظ التعديل</button><button class="btn s" onclick="ed=null;dc=false;render()">إلغاء</button></div><button class="btn s" onclick="delEd()">'+(dc?'اضغط مرة ثانية للتأكيد':'حذف')+'</button></div>'}
+function buy(){const d=$('bd').value||today(),name=$('bn').value.trim(),unit=$('bu').value.trim(),q=n($('bq').value),c=n($('bc').value);if(!name||!unit||q<=0||c<0)return msg('أكمل الاسم والوحدة والكمية والسعر');
+commit(()=>{let x=S.mats.find(y=>y.name===name&&y.unit===unit);if(!x){x={id:uid(),name,unit};S.mats.push(x)}S.purchases.push({id:uid(),s:Date.now(),d,mid:x.id,qty:q,cost:c})},'تمت إضافة الشراء للمخزون')}
 const tb=(h,rs)=>'<div class="tw"><table><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'<th></th></tr>'+rs.join('')+'</table></div>';
 const row=(t,x,cs)=>'<tr>'+cs.map(c=>'<td>'+c+'</td>').join('')+'<td><button class="e" onclick="oe(\''+t+'\',\''+x.id+'\')">✏️</button></td></tr>';
 
 const V={
 sum(){const c=calc();return `<div class="grid">
+<div class="k"><small>مبيعات اليوم</small><b>${m(c.tr)}</b></div><div class="k"><small>ربح اليوم</small><b class="${cl(c.tp)}">${m(c.tp)}</b></div>
 <div class="k"><small>رأس المال</small><b>${m(c.c)}</b></div><div class="k"><small>حقوق الملكية (رأس المال + الربح)</small><b>${m(c.eq)}</b></div>
-<div class="k"><small>قيمة المخزون</small><b>${m(c.inv)}</b></div><div class="k"><small>المبيعات</small><b>${m(c.rev)}</b></div>
+<div class="k"><small>قيمة المخزون</small><b>${m(c.raw)}</b></div><div class="k"><small>إجمالي المبيعات</small><b>${m(c.rev)}</b></div>
 <div class="k"><small>النقد المتوفر</small><b class="${cl(c.cash)}">${m(c.cash)}</b></div><div class="k"><small>صافي الربح</small><b class="${cl(c.net)}">${m(c.net)}</b></div></div>
 <div class="card" style="margin-top:10px"><h2>قائمة الدخل</h2>
-<div class="l"><span>المبيعات</span><span>${m(c.rev)}</span></div><div class="l"><span>تكلفة البضاعة المباعة</span><span>- ${m(c.cogs)}</span></div>
+<div class="l"><span>المبيعات</span><span>${m(c.rev)}</span></div><div class="l"><span>تكلفة المواد المستخدمة</span><span>- ${m(c.cogs)}</span></div>
 <div class="l"><span>مجمل الربح</span><span class="${cl(c.gp)}">${m(c.gp)}</span></div><div class="l"><span>المصاريف</span><span>- ${m(c.ex)}</span></div>
 <div class="l"><b>صافي الربح</b><b class="${cl(c.net)}">${m(c.net)}</b></div></div>
 <div class="card"><h2>الميزانية</h2>
-<div class="l"><span>نقد</span><span>${m(c.cash)}</span></div><div class="l"><span>مخزون مواد خام</span><span>${m(c.raw)}</span></div>
-<div class="l"><span>مخزون قناني جاهزة</span><span>${m(c.fin)}</span></div><div class="l"><b>إجمالي الأصول</b><b>${m(c.cash+c.inv)}</b></div>
-<div class="l"><span>رأس المال</span><span>${m(c.c)}</span></div><div class="l"><span>صافي الربح</span><span>${m(c.net)}</span></div>
-<div class="l"><b>إجمالي حقوق الملكية</b><b>${m(c.eq)}</b></div>
-${Math.abs(c.cash+c.inv-c.eq)<0.01?'<p class="g">✓ الأرقام متوازنة: الأصول = حقوق الملكية</p>':'<p class="r">⚠ في فرق بين الأصول وحقوق الملكية، راجع السجلات</p>'}</div>
+<div class="l"><span>نقد</span><span>${m(c.cash)}</span></div><div class="l"><span>مخزون المواد</span><span>${m(c.raw)}</span></div><div class="l"><b>إجمالي الأصول</b><b>${m(c.cash+c.raw)}</b></div>
+<div class="l"><span>رأس المال</span><span>${m(c.c)}</span></div><div class="l"><span>صافي الربح</span><span>${m(c.net)}</span></div><div class="l"><b>إجمالي حقوق الملكية</b><b>${m(c.eq)}</b></div>
+${Math.abs(c.cash+c.raw-c.eq)<0.01?'<p class="g">✓ الأرقام متوازنة: الأصول = حقوق الملكية</p>':'<p class="r">⚠ في فرق بين الأصول وحقوق الملكية، راجع السجلات</p>'}</div>
 <div class="card"><h2>إعدادات ونسخة احتياطية</h2>
 <label>رمز العملة</label><input value="${esc(S.cur)}" onchange="S.cur=this.value||'د.أ';save();render()">
 <textarea id="bk" rows="3" placeholder="هون بتظهر النسخة الاحتياطية، أو الصقها لتستعيد بياناتك"></textarea>
 <div class="row"><button class="btn s" onclick="$('bk').value=JSON.stringify(S)">تصدير</button><button class="btn s" onclick="imp()">استيراد</button></div>
 <div class="row"><button class="btn s" onclick="lockUI('login')">قفل الآن</button><button class="btn s" onclick="lockUI('change')">تغيير رمز القفل</button></div>
 <button class="btn s" onclick="reset()">${rst?'اضغط مرة ثانية لتأكيد حذف كل البيانات':'مسح كل البيانات'}</button>
-<p class="mu">البيانات محفوظة في متصفحك فقط، خذ نسخة احتياطية بين فترة وفترة. كل سجل بتقدر تعدله أو تحذفه بزر ✏️ وكل الأرقام بتنحسب من جديد تلقائياً.</p></div>`},
-cap(){return `<div class="card"><h2>${S.capital.length?'إضافة على رأس المال (تطوير المحل)':'رأس المال الافتتاحي'}</h2>${fld('capital',null,'a_')}<button class="btn" onclick="add('capital')">إضافة</button></div>
-<div class="card"><h2>سجل رأس المال — ${m(calc().c)}</h2>${tb(['التاريخ','المبلغ','ملاحظة'],byd(S.capital).map(x=>row('capital',x,[x.d,m(x.amt),esc(x.note)])))}</div>`},
+<p class="mu">البيانات محفوظة في متصفحك فقط، خذ نسخة احتياطية (تصدير) بين فترة وفترة. كل سجل بتقدر تعدله أو تحذفه بزر ✏️.</p></div>`},
+sal(){const r=calc().r,g={};byd(S.sales).forEach(x=>(g[x.d]=g[x.d]||[]).push(x));
+return `<div class="card"><h2>تسجيل بيع</h2>${saleForm(null,'a_')}<button class="btn" onclick="saleAdd()">إضافة البيع</button><p class="mu">أول ما تكتب اسم عطر سبق بعته، بتظهر مواده وسعره تلقائياً وبتعدل عليهم متل ما بدك.</p></div>`
++(Object.keys(g).sort().reverse().map(d=>{const a=g[d],rv=sum(a,x=>x.qty*x.price),pf=rv-sum(a,x=>r.cg[x.id]||0);return '<div class="card"><h2>'+d+' — مبيعات '+m(rv)+' · ربح <span class="'+cl(pf)+'">'+m(pf)+'</span></h2>'+tb(['العطر','عدد','المبلغ','التكلفة','الربح'],a.map(x=>{const c=r.cg[x.id]||0,p=x.qty*x.price-c;return row('sales',x,[esc(x.name),x.qty,f(x.qty*x.price),f(c),'<span class="'+cl(p)+'">'+f(p)+'</span>'])}))+'</div>'}).join('')||'<p class="mu">ما في مبيعات لسا</p>')},
 stk(){const c=calc();return `<div class="card"><h2>شراء مواد (يخصم من النقد)</h2><label>التاريخ</label><input id="bd" type="date" value="${today()}">
-<label>اسم المادة</label><input id="bn" list="ml" placeholder="مثلاً: زيت عود"><datalist id="ml">${S.mats.map(x=>'<option value="'+esc(x.name)+'">').join('')}</datalist>
-<label>النوع</label><select id="bt">${Object.entries(TN).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join('')}</select>
-<div class="row"><div><label>الكمية (مل أو حبة)</label><input id="bq" type="number" inputmode="decimal"></div><div><label>إجمالي السعر</label><input id="bc" type="number" inputmode="decimal"></div></div>
+<label>اسم المادة</label><input id="bn" list="ml" placeholder="مثلاً: زيت عود"><datalist id="ml">${[...new Set(S.mats.map(x=>x.name))].map(v=>'<option value="'+esc(v)+'">').join('')}</datalist>
+<label>الوحدة</label><input id="bu" list="ul" placeholder="مل، حبة، غرام..."><datalist id="ul">${[...new Set(['مل','حبة','غرام',...S.mats.map(x=>x.unit)])].map(v=>'<option value="'+esc(v)+'">').join('')}</datalist>
+<div class="row"><div><label>الكمية</label><input id="bq" type="number" inputmode="decimal"></div><div><label>إجمالي السعر</label><input id="bc" type="number" inputmode="decimal"></div></div>
 <button class="btn" onclick="buy()">إضافة للمخزون</button></div>
-<div class="card"><h2>مخزون المواد — ${m(c.raw)}</h2>${tb(['المادة','النوع','الكمية','تكلفة/وحدة','القيمة'],S.mats.map(x=>{const q=c.r.M[x.id];return row('mats',x,[esc(x.name),TN[x.type],f(q.qty)+' '+un(x.type),f(q.qty>0?q.cost/q.qty:0),m(q.cost)])}))}</div>
+<div class="card"><h2>مخزون المواد — ${m(c.raw)}</h2>${tb(['المادة','الكمية','تكلفة/وحدة','القيمة'],S.mats.map(x=>{const q=c.r.M[x.id];return row('mats',x,[esc(x.name),'<span class="'+(q.qty<-1e-6?'r':'')+'">'+f(q.qty)+' '+esc(x.unit)+(q.qty<-1e-6?' ⚠':'')+'</span>',f(q.qty>0?q.cost/q.qty:q.last),m(q.cost)])}))}</div>
 <div class="card"><h2>سجل المشتريات</h2>${tb(['التاريخ','المادة','الكمية','السعر'],byd(S.purchases).map(x=>row('purchases',x,[x.d,esc(mn(x.mid)),f(x.qty),m(x.cost)])))}</div>`},
-mk(){const c=calc(),r=c.r,live=S.makes.filter(x=>(r.mk[x.id]||{}).qty>0);return `<div class="card"><h2>تصنيع قنينة عطر</h2>${fld('makes',null,'a_')}<button class="btn" onclick="add('makes')">تصنيع وخصم من المخزون</button></div>
-<div class="card"><h2>مبيعات اليوم (دفعة وحدة)</h2><label>التاريخ</label><input id="dd" type="date" value="${today()}">
-${live.length?'<div class="tw"><table><tr><th>العطر</th><th>متوفر</th><th>المباع</th><th>السعر</th></tr>'+live.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+r.mk[x.id].qty+'</td><td><input id="dq_'+x.id+'" type="number" inputmode="numeric" min="0" placeholder="0" oninput="dayCalc()"></td><td><input id="dp_'+x.id+'" type="number" inputmode="decimal" value="'+(x.sell||'')+'" oninput="dayCalc()"></td></tr>').join('')+'</table></div><p id="dt" class="mu"></p><button class="btn" onclick="daySave()">حفظ مبيعات اليوم</button>':'<p class="mu">ما في قناني جاهزة للبيع</p>'}</div>
-<div class="card"><h2>القناني المصنّعة</h2>${tb(['التاريخ','العطر','مل (زيت+كحول)','متوفر','التكلفة','البيع'],byd(S.makes).map(x=>row('makes',x,[x.d,esc(x.name),f(x.oilMl)+'+'+f(x.alcMl),r.mk[x.id].qty,f(r.mk[x.id].u),f(x.sell)])))}</div>
-<div class="card"><h2>سجل المبيعات</h2>${tb(['التاريخ','العطر','الكمية','المبلغ','الربح'],byd(S.sales).map(x=>{const p=x.qty*x.price-(r.cg[x.id]||0);return row('sales',x,[x.d,esc((r.mk[x.mk]||{}).name||'؟'),x.qty,f(x.qty*x.price),'<span class="'+cl(p)+'">'+f(p)+'</span>'])}))}</div>`},
 exp(){return `<div class="card"><h2>إضافة مصروف</h2>${fld('exps',null,'a_')}<button class="btn" onclick="add('exps')">إضافة</button></div>
-<div class="card"><h2>المصاريف — ${m(calc().ex)}</h2>${tb(['التاريخ','البيان','المبلغ'],byd(S.exps).map(x=>row('exps',x,[x.d,esc(x.desc),m(x.amt)])))}</div>`}};
-const TABS=[['sum','الملخص'],['cap','رأس المال'],['stk','المخزون'],['mk','القناني والمبيعات'],['exp','المصاريف']];
+<div class="card"><h2>المصاريف — ${m(calc().ex)}</h2>${tb(['التاريخ','البيان','المبلغ'],byd(S.exps).map(x=>row('exps',x,[x.d,esc(x.desc),m(x.amt)])))}</div>`},
+cap(){return `<div class="card"><h2>${S.capital.length?'إضافة على رأس المال (تطوير المحل)':'رأس المال الافتتاحي'}</h2>${fld('capital',null,'a_')}<button class="btn" onclick="add('capital')">إضافة</button></div>
+<div class="card"><h2>سجل رأس المال — ${m(calc().c)}</h2>${tb(['التاريخ','المبلغ','ملاحظة'],byd(S.capital).map(x=>row('capital',x,[x.d,m(x.amt),esc(x.note)])))}</div>`}};
+const TABS=[['sal','المبيعات'],['stk','المخزون'],['exp','المصاريف'],['cap','رأس المال'],['sum','الملخص']];
 function render(){$('tabs').innerHTML=TABS.map(t=>'<button class="'+(t[0]===tab?'on':'')+'" onclick="tab=\''+t[0]+'\';ed=null;dc=false;rst=false;$(\'msg\').innerHTML=\'\';render()">'+t[1]+'</button>').join('');$('app').innerHTML=edCard()+V[tab]()}
-function imp(){try{const o=JSON.parse($('bk').value);if(o.v!==2||!o.mats||!o.sales)throw 0;if(R(o).err.length)throw 0;S=o;save();render();msg('تمت الاستعادة',1)}catch(e){msg('النسخة غير صالحة')}}
-function reset(){if(!rst){rst=true;render();return}S={v:2,cur:S.cur,mats:[],capital:[],purchases:[],makes:[],sales:[],exps:[]};rst=false;save();render()}
+function imp(){try{const o=JSON.parse($('bk').value);if(o.v!==3||!o.mats||!o.sales)throw 0;if(R(o).err.length)throw 0;S=o;save();render();msg('تمت الاستعادة',1)}catch(e){msg('النسخة غير صالحة')}}
+function reset(){if(!rst){rst=true;render();return}S={v:3,cur:S.cur,mats:[],capital:[],purchases:[],sales:[],exps:[]};rst=false;save();render()}
 render();
 /* القفل */
 let mode='login',fails=0,until=0,hiddenAt=0;
