@@ -35,9 +35,14 @@ th,td{padding:6px 5px;border-bottom:1px solid var(--bd);text-align:start;white-s
 .l{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--bd)}
 .g{color:var(--gd)}.r{color:var(--rd)}.mu{color:var(--mu);font-size:13px}
 #msg{min-height:20px;margin:4px 0;font-size:14px}
-</style></head><body>
+body.locked>*:not(#lock){display:none!important}#lock{display:none}body.locked #lock{display:block}
+</style></head><body class="locked">
 <h1>🧴 نظام محاسبة محل العطور</h1>
 <div class="tabs" id="tabs"></div><div id="msg"></div><div id="app"></div>
+<div id="lock"><div class="card" style="margin-top:18vh;text-align:center"><div style="font-size:42px">🔒</div><h2 id="lt"></h2>
+<input id="p1" type="password" inputmode="numeric" autocomplete="off" placeholder="الرمز">
+<input id="p2" type="password" inputmode="numeric" autocomplete="off" placeholder="تأكيد الرمز" style="margin-top:8px">
+<button class="btn" id="lb" onclick="submitPin()"></button><div id="le" class="r" style="margin-top:8px"></div></div></div>
 <script>
 const K='perfume_acc_v1';let S=null;
 try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
@@ -88,6 +93,7 @@ sum(){const c=calc();return `
 <textarea id="bk" rows="3" placeholder="هون بتظهر النسخة الاحتياطية، أو الصقها لتستعيد بياناتك"></textarea>
 <div class="row"><button class="btn s" onclick="$('bk').value=JSON.stringify(S)">تصدير</button><button class="btn s" onclick="imp()">استيراد</button></div>
 <button class="btn s" onclick="reset()">${rst?'اضغط مرة ثانية لتأكيد حذف كل البيانات':'مسح كل البيانات'}</button>
+<div class="row"><button class="btn s" onclick="lockUI('login')">قفل الآن</button><button class="btn s" onclick="lockUI('change')">تغيير رمز القفل</button></div>
 <p class="mu">البيانات محفوظة في متصفحك فقط، خذ نسخة احتياطية بين فترة وفترة.</p></div>`},
 cap(){return `<div class="card"><h2>${S.capital.length?'إضافة على رأس المال (تطوير المحل)':'رأس المال الافتتاحي'}</h2>
 <label>المبلغ</label><input id="ca" type="number" inputmode="decimal">
@@ -142,5 +148,20 @@ function addExp(){const a=n($('ea').value),d=$('ed').value.trim();if(a<=0||!d)re
 function imp(){try{const o=JSON.parse($('bk').value);if(!o.capital||!o.mats)throw 0;S=o;save();render();msg('تمت الاستعادة',1)}catch(e){msg('النسخة غير صالحة')}}
 function reset(){if(!rst){rst=true;render();return}S={cur:S.cur,capital:[],mats:[],purchases:[],prods:[],sales:[],exps:[]};rst=false;save();render()}
 render();
+const PK='perfume_pin_v1';let mode='login',fails=0,until=0,hiddenAt=0;
+const hs=async p=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('perfume:'+p));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')};
+const gp=()=>{try{return localStorage.getItem(PK)}catch(e){return null}};
+function lockUI(md){mode=md;document.body.classList.add('locked');$('lt').textContent=md==='login'?'أدخل رمز القفل':md==='setup'?'أنشئ رمز قفل (4 أرقام على الأقل)':'أدخل رمز القفل الجديد';
+$('p2').style.display=md==='login'?'none':'block';$('lb').textContent=md==='login'?'فتح':'حفظ الرمز';$('p1').value=$('p2').value='';$('le').textContent=''}
+async function submitPin(){const a=$('p1').value,e=$('le');
+if(mode==='login'){if(Date.now()<until){e.textContent='انتظر قليلاً ثم حاول مرة ثانية';return}
+if(await hs(a)===gp()){fails=0;document.body.classList.remove('locked')}else{fails++;until=Date.now()+Math.min(fails*3,60)*1000;e.textContent='الرمز غير صحيح'}return}
+if(a.length<4){e.textContent='الرمز لازم 4 أرقام على الأقل';return}
+if(a!==$('p2').value){e.textContent='الرمزان غير متطابقين';return}
+try{localStorage.setItem(PK,await hs(a))}catch(x){e.textContent='تعذر حفظ الرمز';return}
+document.body.classList.remove('locked')}
+['p1','p2'].forEach(i=>$(i).addEventListener('keydown',e=>{if(e.key==='Enter')submitPin()}));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>30000&&gp())lockUI('login')});
+lockUI(gp()?'login':'setup');
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 </script></body></html>
